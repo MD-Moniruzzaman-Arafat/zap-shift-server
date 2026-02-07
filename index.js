@@ -39,7 +39,24 @@ async function run() {
         const result = await parcelCollection.insertOne(parcel);
         res.status(201).json(result);
       } catch (error) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    // get all my parcel api
+    app.get('/parcel', async (req, res) => {
+      try {
+        const queryEmail = req.query.email;
+        const result = await parcelCollection
+          .find({ createdBy: queryEmail })
+          .toArray();
+        res.status(200).json({
+          status: 'success',
+          total_data: result.length,
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
       }
     });
   } finally {
