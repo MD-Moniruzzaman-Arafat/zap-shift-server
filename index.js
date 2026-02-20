@@ -1,3 +1,5 @@
+const admin = require('firebase-admin');
+const serviceAccount = require('./firebase-admin.json');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 require('dotenv').config();
@@ -35,8 +37,31 @@ async function run() {
     const paidParcelCollection = database.collection('paid_parcels');
     const userCollection = database.collection('users');
 
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+
+    const tokenVerify = async (req, res, next) => {
+      try {
+        const authHeader = req.headers.authorization;
+        console.log(authHeader);
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return res.status(401).json({ message: 'Unauthorized access' });
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        const decodedUser = await admin.auth().verifyIdToken(token);
+
+        req.user = decodedUser; // user info attach
+        next();
+      } catch (error) {
+        return res.status(401).json({ message: 'Invalid or expired token' });
+      }
+    };
+
     // parcel create api
-    app.post('/parcels', async (req, res) => {
+    app.post('/parcels', tokenVerify, async (req, res) => {
       try {
         const parcel = req.body;
         const result = await parcelCollection.insertOne(parcel);
@@ -47,7 +72,7 @@ async function run() {
     });
 
     // get all my parcel api
-    app.get('/parcel', async (req, res) => {
+    app.get('/parcel', tokenVerify, async (req, res) => {
       try {
         const queryEmail = req.query.email;
         const option = {
@@ -67,7 +92,7 @@ async function run() {
     });
 
     // get single parcel
-    app.get('/parcel/:id', async (req, res) => {
+    app.get('/parcel/:id', tokenVerify, async (req, res) => {
       try {
         const parcelId = req.params.id;
         const result = await parcelCollection.findOne({
@@ -80,7 +105,7 @@ async function run() {
     });
 
     // delete single parcel
-    app.delete('/parcel/:id', async (req, res) => {
+    app.delete('/parcel/:id', tokenVerify, async (req, res) => {
       try {
         const parcelId = req.params.id;
         const result = await parcelCollection.deleteOne({
@@ -95,7 +120,7 @@ async function run() {
     });
 
     // payment record and update parcel status api
-    app.post('/payment', async (req, res) => {
+    app.post('/payment', tokenVerify, async (req, res) => {
       try {
         const { parcelId, email, amount, payment_Method, transactionId } =
           req.body;
@@ -142,7 +167,8 @@ async function run() {
     });
 
     // get my payment history
-    app.get('/payment', async (req, res) => {
+    app.get('/payment', tokenVerify, async (req, res) => {
+      console.log(req.headers);
       try {
         const queryEmail = req.query.email;
         const option = {
@@ -164,7 +190,7 @@ async function run() {
     // strip payment api
     const YOUR_DOMAIN = 'http://localhost:5173';
 
-    app.post('/create-checkout-session', async (req, res) => {
+    app.post('/create-checkout-session', tokenVerify, async (req, res) => {
       try {
         const session = await stripe.paymentIntents.create({
           amount: req.body.amount,
