@@ -36,6 +36,7 @@ async function run() {
     const parcelCollection = database.collection('parcels');
     const paidParcelCollection = database.collection('paid_parcels');
     const userCollection = database.collection('users');
+    const riderCollection = database.collection('riders');
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
@@ -188,7 +189,7 @@ async function run() {
     });
 
     // strip payment api
-    const YOUR_DOMAIN = 'http://localhost:5173';
+    // const YOUR_DOMAIN = 'http://localhost:5173';
 
     app.post('/create-checkout-session', tokenVerify, async (req, res) => {
       try {
@@ -223,6 +224,16 @@ async function run() {
         if (result) {
           return res.status(200).json({ status: 'success', data: result });
         }
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.post('/riders', async (req, res) => {
+      try {
+        const rider = req.body;
+        const result = await riderCollection.insertOne(rider);
+        res.status(201).json({ status: 'success', data: result });
       } catch (error) {
         res.status(500).json({ error: error.message });
       }
