@@ -229,11 +229,20 @@ async function run() {
       }
     });
 
-    app.post('/riders', async (req, res) => {
+    app.post('/riders', tokenVerify, async (req, res) => {
       try {
         const rider = req.body;
         const result = await riderCollection.insertOne(rider);
         res.status(201).json({ status: 'success', data: result });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.get('/riders', tokenVerify, async (req, res) => {
+      try {
+        const result = await riderCollection.find().toArray();
+        res.status(200).json({ status: 'success', data: result });
       } catch (error) {
         res.status(500).json({ error: error.message });
       }
