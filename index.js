@@ -247,6 +247,41 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
+
+    app.patch('/riders/:id/status', tokenVerify, async (req, res) => {
+      try {
+        const riderId = req.params.id;
+        const { status, email } = req.body;
+
+        const updateData = {
+          status,
+        };
+
+        if (status === 'approved') {
+          updateData.approveDate = new Date();
+          await userCollection.updateOne(
+            { email },
+            { $set: { role: 'rider' } }
+          );
+        }
+
+        if (status === 'rejected') {
+          updateData.rejectDate = new Date();
+        }
+
+        const result = await riderCollection.updateOne(
+          { _id: new ObjectId(riderId) },
+          { $set: updateData }
+        );
+
+        res.status(200).json({
+          status: 'success',
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
