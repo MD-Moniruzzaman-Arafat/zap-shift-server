@@ -282,6 +282,63 @@ async function run() {
         res.status(500).json({ error: error.message });
       }
     });
+
+    app.get('/users/search', async (req, res) => {
+      try {
+        const emailQuery = req.query.email;
+        if (!emailQuery) {
+          return res
+            .status(400)
+            .json({ message: 'Email query parameter is required' });
+        }
+        const regex = new RegExp(emailQuery, 'i'); // 'i' for case-insensitive search
+        const result = await userCollection
+          .find({ email: { $regex: regex } })
+          .project({ email: 1, role: 1, create_at: 1 })
+          .limit(10)
+          .toArray();
+        res.status(200).json({ status: 'success', data: result });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.patch('/users/:id/role', tokenVerify, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const { role } = req.body;
+
+        if (!['admin', 'user'].includes(role)) {
+          return res.status(400).json({ message: 'Invalid role specified' });
+        }
+
+        const result = await userCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { role } }
+        );
+
+        res.status(200).json({ status: 'success', data: result });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.get('users/:email/role', async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (!email) {
+          return res.status(400).json({ message: 'email is required' });
+        }
+
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).json({ message: 'user not found' });
+        }
+        res.status(200).json({ status: 'success', data: { role: user.role } });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
