@@ -323,7 +323,7 @@ async function run() {
       }
     });
 
-    app.get('users/:email/role', async (req, res) => {
+    app.get('/users/:email/role', async (req, res) => {
       try {
         const email = req.params.email;
         if (!email) {
@@ -331,6 +331,7 @@ async function run() {
         }
 
         const user = await userCollection.findOne({ email });
+        console.log(user);
         if (!user) {
           return res.status(404).json({ message: 'user not found' });
         }
