@@ -37,6 +37,7 @@ async function run() {
     const paidParcelCollection = database.collection('paid_parcels');
     const userCollection = database.collection('users');
     const riderCollection = database.collection('riders');
+    const assignParcelCollection = database.collection('assign_parcels');
 
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
@@ -138,6 +139,162 @@ async function run() {
         });
       } catch (error) {
         res.status(500).json({ error: error.message });
+      }
+    });
+
+    app.post('/assign-parcel', async (req, res) => {
+      try {
+        const { parcelId, riderId } = req.body;
+
+        // ── Validate input ──────────────────────────────────────────────────────
+        if (!parcelId || !riderId) {
+          return res.status(400).json({
+            success: false,
+            message: 'parcelId and riderId are required.',
+          });
+        }
+
+        if (!ObjectId.isValid(parcelId) || !ObjectId.isValid(riderId)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid parcelId or riderId format.',
+          });
+        }
+
+        // ── Fetch parcel ────────────────────────────────────────────────────────
+        const parcel = await parcelCollection.findOne({
+          _id: new ObjectId(parcelId),
+        });
+
+        if (!parcel) {
+          return res.status(404).json({
+            success: false,
+            message: 'Parcel not found.',
+          });
+        }
+
+        if (parcel.deliveryStatus === 'Delivered') {
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot assign rider to an already delivered parcel.',
+          });
+        }
+
+        // ── Fetch rider ─────────────────────────────────────────────────────────
+        const rider = await riderCollection.findOne({
+          _id: new ObjectId(riderId),
+        });
+
+        if (!rider) {
+          return res.status(404).json({
+            success: false,
+            message: 'Rider not found.',
+          });
+        }
+
+        if (rider.status === 'assigned') {
+          return res.status(400).json({
+            success: false,
+            message: 'This rider is already assigned to another parcel.',
+          });
+        }
+
+        if (rider.status !== 'approved') {
+          return res.status(400).json({
+            success: false,
+            message: 'Rider is not approved yet.',
+          });
+        }
+
+        const now = new Date();
+
+        // ── 1. Create assignedParcel document ───────────────────────────────────
+        const assignedParcelDoc = {
+          parcelId: new ObjectId(parcelId),
+          riderId: new ObjectId(riderId),
+
+          // Parcel snapshot
+          trackingId: parcel.trackingId,
+          parcelName: parcel.parcelName,
+          parcelWeight: parcel.parcelWeight,
+          type: parcel.type,
+          cost: parcel.cost,
+          paymentStatus: parcel.paymentStatus,
+
+          senderName: parcel.senderName,
+          senderPhone: parcel.senderPhone,
+          senderAddress: parcel.address,
+          pickupInstruction: parcel.pickupInstruction,
+
+          receiverName: parcel.receiverName,
+          receiverPhone: parcel.receiverPhone,
+          receiverAddress: parcel.receiverAddress,
+          deliveryInstruction: parcel.deliveryInstruction,
+
+          yourDistrict: parcel.yourDistrict,
+          yourRegion: parcel.yourRegion || null,
+          receiverDistrict: parcel.receiverDistrict,
+
+          // Rider snapshot
+          riderName: rider.name,
+          riderEmail: rider.email,
+          riderPhone: rider.phone,
+          riderRegion: rider.yourRegion,
+          riderDistrict: rider.yourDistrict,
+          bikeRegistrationNumber: rider.bikeRegistrationNumber,
+
+          // Meta
+          assignedAt: now,
+          deliveryStatus: 'In Transit',
+          createdBy: parcel.createdBy,
+        };
+
+        const insertResult =
+          await assignParcelCollection.insertOne(assignedParcelDoc);
+
+        // ── 2. Update parcel deliveryStatus → "In Transit" ──────────────────────
+        await parcelCollection.updateOne(
+          { _id: new ObjectId(parcelId) },
+          {
+            $set: {
+              deliveryStatus: 'In Transit',
+              assignedRiderId: new ObjectId(riderId),
+              assignedRiderName: rider.name,
+              assignedAt: now,
+            },
+          }
+        );
+
+        // ── 3. Update rider status → "assigned" ─────────────────────────────────
+        await riderCollection.updateOne(
+          { _id: new ObjectId(riderId) },
+          {
+            $set: {
+              status: 'assigned',
+              currentParcelId: new ObjectId(parcelId),
+              currentTrackingId: parcel.trackingId,
+              assignedAt: now,
+            },
+          }
+        );
+
+        return res.status(200).json({
+          success: true,
+          message: 'Parcel assigned to rider successfully.',
+          data: {
+            assignedParcelId: insertResult.insertedId,
+            trackingId: parcel.trackingId,
+            riderName: rider.name,
+            assignedAt: now,
+          },
+        });
+      } catch (error) {
+        console.error('Assign parcel error:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Internal server error.',
+          error: error.message,
+        });
       }
     });
 
