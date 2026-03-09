@@ -61,6 +61,20 @@ async function run() {
       }
     };
 
+    const adminVerify = async (req, res, next) => {
+      try {
+        const userEmail = req.user.email;
+        const user = await userCollection.findOne({ email: userEmail });
+
+        if (!user || user.role !== 'admin') {
+          return res.status(403).json({ message: 'Forbidden access' });
+        }
+        next();
+      } catch (error) {
+        return res.status(500).json({ message: 'Internal server error' });
+      }
+    };
+
     // parcel create api
     app.post('/parcels', tokenVerify, async (req, res) => {
       try {
@@ -75,13 +89,20 @@ async function run() {
     // get all my parcel api
     app.get('/parcel', tokenVerify, async (req, res) => {
       try {
-        const queryEmail = req.query.email;
+        const { email, paymentStatus, deliveryStatus } = req.query;
+        const query = {};
+        if (email) {
+          query.createdBy = email;
+        }
+
+        if (paymentStatus == 'paid' || paymentStatus === 'unpaid') {
+          query.paymentStatus = paymentStatus;
+        }
+
         const option = {
           sort: { createdDate: -1 },
         };
-        const result = await parcelCollection
-          .find({ createdBy: queryEmail }, option)
-          .toArray();
+        const result = await parcelCollection.find(query, option).toArray();
         res.status(200).json({
           status: 'success',
           total_data: result.length,
@@ -303,7 +324,7 @@ async function run() {
       }
     });
 
-    app.patch('/users/:id/role', tokenVerify, async (req, res) => {
+    app.patch('/users/:id/role', tokenVerify, adminVerify, async (req, res) => {
       try {
         const id = req.params.id;
         const { role } = req.body;
