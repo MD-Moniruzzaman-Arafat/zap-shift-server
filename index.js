@@ -1,5 +1,4 @@
 const admin = require('firebase-admin');
-const serviceAccount = require('./firebase-admin.json');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 require('dotenv').config();
@@ -10,6 +9,13 @@ const port = process.env.PORT || 5000;
 
 app.use(express.json());
 app.use(cors());
+
+const decoded = Buffer.from(process.env.FB_KEY, 'base64').toString('utf8');
+const serviceAccount = JSON.parse(decoded);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://mdmoniruzzamanarafat_db_user:${process.env.DB_PASSWORD}@cluster0.cvx7qwv.mongodb.net/?appName=Cluster0`;
 
@@ -25,9 +31,9 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db('admin').command({ ping: 1 });
+    // await client.db('admin').command({ ping: 1 });
     console.log(
       'Pinged your deployment. You successfully connected to MongoDB!'
     );
@@ -38,10 +44,6 @@ async function run() {
     const userCollection = database.collection('users');
     const riderCollection = database.collection('riders');
     const assignParcelCollection = database.collection('assign_parcels');
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
 
     const tokenVerify = async (req, res, next) => {
       try {
